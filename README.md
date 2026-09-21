@@ -2,7 +2,7 @@
 
 Convert a folder of office documents, spreadsheets, slides, PDFs and text files into a small set of Markdown files that any AI assistant can read easily.
 
-AI tools handle Markdown far better than binary formats like `.xlsx` or `.pptx`. `merge_ms_files.py` walks a directory, extracts the text and tables from every supported file, and merges the results into numbered Markdown files, one series per file type.
+AI tools handle Markdown far better than binary formats like `.xlsx` or `.pptx`. `convert_to_markdown.py` walks a directory, extracts the text and tables from every supported file, and merges the results into numbered Markdown files, one series per file type.
 
 ## Supported formats
 
@@ -43,7 +43,7 @@ pip install -r requirements.txt
 2. Run the script from the directory that contains `resources/`:
 
    ```bash
-   python merge_ms_files.py
+   python convert_to_markdown.py
    ```
 
 3. Read the results in `merged_md_output/`.
@@ -100,7 +100,7 @@ Every source file starts with a banner showing its path relative to `resources/`
 
 ## Configuration
 
-The script has no command-line options. Edit the call at the bottom of [merge_ms_files.py](merge_ms_files.py):
+The script has no command-line options. Edit the call at the bottom of [convert_to_markdown.py](convert_to_markdown.py):
 
 ```python
 process_all_extensions(
@@ -113,7 +113,7 @@ process_all_extensions(
 You can also import it from your own code:
 
 ```python
-from merge_ms_files import process_all_extensions
+from convert_to_markdown import process_all_extensions
 
 process_all_extensions("my_docs", "out", max_files_per_batch=50)
 ```
