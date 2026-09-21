@@ -32,10 +32,10 @@ cd converter-for-ai
 
 python -m venv .venv
 source .venv/bin/activate
-pip install python-docx pandas openpyxl python-pptx pypdf tabulate
+pip install -r requirements.txt
 ```
 
-> Install `python-docx`, not the unrelated `docx` package. `tabulate` is not imported directly, but pandas needs it to write Markdown tables. Without it, spreadsheets and CSVs fail with `Import tabulate failed`.
+> `tabulate` is not imported directly, but pandas needs it to write Markdown tables. Without it, spreadsheets and CSVs fail with `Import tabulate failed`. If you install packages by hand, use `python-docx`, not the unrelated `docx` package.
 
 ## Usage
 
