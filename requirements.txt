@@ -1,0 +1,18 @@
+# Word (.docx). Do not install the unrelated "docx" package.
+python-docx
+
+# Excel / CSV reading
+pandas
+openpyxl
+
+# tabulate is not imported directly, but pandas needs it for DataFrame.to_markdown()
+tabulate
+
+# PowerPoint (.pptx, .potx)
+python-pptx
+
+# PDF
+pypdf
+
+# Not installable with pip: legacy .doc support also needs LibreOffice
+# (the "libreoffice" command on PATH).
