@@ -1,3 +1,4 @@
+import argparse
 import os
 from pathlib import Path
 import subprocess
@@ -190,7 +191,24 @@ def extract_pdf(file_path):
     return "\n".join(md_output)
 
 
+EXTRACTORS = {
+    ".txt": extract_txt,
+    ".docx": extract_docx,
+    ".doc": extract_doc,
+    ".xlsx": extract_excel,
+    ".xlsm": extract_excel,
+    ".csv": extract_excel,
+    ".pptx": extract_pptx,
+    ".potx": extract_pptx,
+    ".pdf": extract_pdf,
+}
+
+
 # --- MAIN LOGIC ---
+
+
+def file_banner(label):
+    return f"\n\n{'='*80}\n# FILE: {label}\n{'='*80}\n\n"
 
 
 def process_all_extensions(
@@ -204,23 +222,11 @@ def process_all_extensions(
 
     ignored_extensions = {".png", ".jpg", ".jpeg", ".gif", ".bmp", ".svg"}
 
-    extractors = {
-        ".txt": extract_txt,
-        ".docx": extract_docx,
-        ".doc": extract_doc,
-        ".xlsx": extract_excel,
-        ".xlsm": extract_excel,
-        ".csv": extract_excel,
-        ".pptx": extract_pptx,
-        ".potx": extract_pptx,
-        ".pdf": extract_pdf,
-    }
-
     files_by_ext = {}
     for f in source_path.rglob("*"):
         if f.is_file():
             ext = f.suffix.lower()
-            if ext in ignored_extensions or ext not in extractors:
+            if ext in ignored_extensions or ext not in EXTRACTORS:
                 continue
             files_by_ext.setdefault(ext, []).append(f)
 
@@ -230,7 +236,7 @@ def process_all_extensions(
 
     for ext, file_list in files_by_ext.items():
         clean_ext_name = ext.replace(".", "")
-        extractor = extractors[ext]
+        extractor = EXTRACTORS[ext]
         print(f"Processing {len(file_list)} files for extension: '{ext}'...")
 
         batch_num = 1
@@ -247,9 +253,7 @@ def process_all_extensions(
             try:
                 relative_path = file_path.relative_to(source_path)
 
-                current_out_file.write(f"\n\n{'='*80}\n")
-                current_out_file.write(f"# FILE: {relative_path}\n")
-                current_out_file.write(f"{'='*80}\n\n")
+                current_out_file.write(file_banner(relative_path))
 
                 content = extractor(file_path)
                 current_out_file.write(content + "\n\n")
@@ -270,8 +274,127 @@ def process_all_extensions(
     print("\nAll done! Converted files are saved in:", output_path.resolve())
 
 
-if __name__ == "__main__":
-    process_all_extensions(
-        source_dir="resources", output_dir="./merged_md_output"
+def find_input_file(name, source_path):
+    """Locate a file named on the command line.
+
+    Tries the path as given, then the path under source_path, then (for a bare
+    file name) a recursive search of source_path.
+    """
+    path = Path(name)
+    if path.is_file():
+        return path
+
+    in_source = source_path / name
+    if in_source.is_file():
+        return in_source
+
+    if path.name == name:
+        matches = sorted(
+            f for f in source_path.rglob("*") if f.is_file() and f.name == name
+        )
+        if len(matches) == 1:
+            return matches[0]
+        if matches:
+            found = ", ".join(str(m.relative_to(source_path)) for m in matches)
+            raise ValueError(f"{name}: ambiguous, matches {found}")
+
+    raise ValueError(f"{name}: file not found")
+
+
+def display_path(file_path, source_path):
+    """Path shown in the FILE banner: relative to source_path if inside it."""
+    try:
+        return file_path.resolve().relative_to(source_path.resolve())
+    except ValueError:
+        return file_path
+
+
+def convert_files(
+    files,
+    source_dir="resources",
+    output_dir="./merged_md_output",
+):
+    """Convert the named files into one Markdown file.
+
+    A single file is written as <name>.md, several files are merged into
+    merged.md. Raises ValueError if a file cannot be found or is not a
+    supported type, or if none of them could be converted.
+    """
+    source_path = Path(source_dir)
+    output_path = Path(output_dir)
+
+    found = []
+    errors = []
+    for name in files:
+        try:
+            file_path = find_input_file(name, source_path)
+        except ValueError as e:
+            errors.append(str(e))
+            continue
+        if file_path.suffix.lower() not in EXTRACTORS:
+            errors.append(f"{name}: unsupported file type")
+            continue
+        found.append(file_path)
+    if errors:
+        raise ValueError("\n".join(errors))
+
+    # Drop duplicates, keeping the order the files were given in
+    file_paths = list({p.resolve(): p for p in found}.values())
+
+    sections = []
+    for file_path in file_paths:
+        label = display_path(file_path, source_path)
+        print(f"Converting {label}...")
+        try:
+            content = EXTRACTORS[file_path.suffix.lower()](file_path)
+        except Exception as e:
+            print(f"  [Skipped] {file_path.name}: {e}")
+            continue
+        sections.append(file_banner(label) + content + "\n\n")
+
+    if not sections:
+        raise ValueError("None of the files could be converted.")
+
+    if len(file_paths) == 1:
+        out_name = f"{file_paths[0].stem}.md"
+    else:
+        out_name = "merged.md"
+    output_path.mkdir(parents=True, exist_ok=True)
+    out_file = output_path / out_name
+    out_file.write_text("".join(sections), encoding="utf-8")
+
+    print("\nAll done! Converted file is saved as:", out_file.resolve())
+
+
+def build_parser():
+    parser = argparse.ArgumentParser(
+        description=(
+            "Convert documents to Markdown for AI assistants. With no "
+            "arguments, every supported file under resources/ is converted "
+            "and merged by file type. With file arguments, only those files "
+            "are converted, into a single Markdown file."
+        )
     )
+    parser.add_argument(
+        "files",
+        nargs="*",
+        metavar="FILE",
+        help="file to convert: a path, or a name to look up under resources/",
+    )
+    return parser
+
+
+if __name__ == "__main__":
+    source_dir = "resources"
+    output_dir = "./merged_md_output"
+
+    parser = build_parser()
+    args = parser.parse_args()
+    if args.files:
+        try:
+            convert_files(args.files, source_dir, output_dir)
+        except ValueError as e:
+            parser.error(str(e))
+    else:
+        process_all_extensions(source_dir, output_dir)
 

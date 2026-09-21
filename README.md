@@ -39,14 +39,20 @@ pip install -r requirements.txt
 
 ## Usage
 
-1. Put the files you want to convert in a `resources/` folder. Subfolders are searched recursively.
-2. Run the script from the directory that contains `resources/`:
+Put the files you want to convert in a `resources/` folder (subfolders are searched recursively) and run the script from the directory that contains `resources/`. What it converts depends on the arguments:
 
-   ```bash
-   python convert_to_markdown.py
-   ```
+```bash
+# No arguments: convert every supported file under resources/
+python convert_to_markdown.py
 
-3. Read the results in `merged_md_output/`.
+# One file: convert just that file
+python convert_to_markdown.py budget.docx
+
+# Several files: convert them and merge them into one Markdown file
+python convert_to_markdown.py budget.docx sales.xlsx
+```
+
+Read the results in `merged_md_output/`. With no arguments the output looks like this:
 
 ```
 Found 6 processable files across 5 extensions.
@@ -62,9 +68,19 @@ All done! Converted files are saved in: /path/to/merged_md_output
 
 Both folders are relative to the directory you run the command from, not to the script's location. Files that cannot be parsed are reported as `[Skipped] <name>: <error>` in the console, so check the output after a run.
 
+### Converting specific files
+
+Each argument is looked up in this order, and the first match wins:
+
+1. The path as you typed it, relative to the current directory (so files outside `resources/` work too).
+2. The path under `resources/`, for example `sub/data.xlsx`.
+3. If the argument is a bare file name, a recursive search of `resources/` for a file with that name. If several files share the name, the command stops and lists them; give the path from `resources/` instead (`a/dup.txt`).
+
+Naming the same file more than once converts it once. If any argument cannot be found or is not a supported type, the command reports every problem and exits without writing anything.
+
 ## Output format
 
-Output is grouped by extension and named `merged_<ext>_partNN.md`. Each file holds at most 100 source files. Bigger sets roll over to `part02`, `part03` and so on, which keeps each file at a size that is easy to upload or load into a context window.
+**All files (no arguments):** output is grouped by extension and named `merged_<ext>_partNN.md`. Each file holds at most 100 source files. Bigger sets roll over to `part02`, `part03` and so on, which keeps each file at a size that is easy to upload or load into a context window.
 
 ```
 merged_md_output/
@@ -75,7 +91,9 @@ merged_md_output/
 └── merged_xlsx_part01.md
 ```
 
-Every source file starts with a banner showing its path relative to `resources/`, so the AI can tell where each piece of content came from:
+**Specific files:** everything goes into a single file, whatever the file types, and it is not split into parts. One file is written as `<name>.md` (`budget.docx` becomes `budget.md`); two or more are merged into `merged.md`, in the order you gave them. These names never overlap with the `merged_<ext>_partNN.md` files, so converting a few files does not overwrite the results of a full run. It does overwrite an earlier output with the same name.
+
+Every source file starts with a banner showing its path relative to `resources/` (or the path you typed, for a file outside `resources/`), so the AI can tell where each piece of content came from:
 
 ```markdown
 ================================================================================
@@ -100,35 +118,37 @@ Every source file starts with a banner showing its path relative to `resources/`
 
 ## Configuration
 
-The script has no command-line options. Edit the call at the bottom of [convert_to_markdown.py](convert_to_markdown.py):
+The only command-line arguments are the optional files to convert. The two folders are set at the bottom of [convert_to_markdown.py](convert_to_markdown.py):
 
 ```python
-process_all_extensions(
-    source_dir="resources",
-    output_dir="./merged_md_output",
-    max_files_per_batch=100,
-)
+source_dir = "resources"
+output_dir = "./merged_md_output"
 ```
 
-You can also import it from your own code:
+The 100-files-per-output limit is the `max_files_per_batch=100` parameter of `process_all_extensions()`.
+
+You can also import both modes from your own code:
 
 ```python
-from convert_to_markdown import process_all_extensions
+from convert_to_markdown import convert_files, process_all_extensions
 
 process_all_extensions("my_docs", "out", max_files_per_batch=50)
+convert_files(["budget.docx", "sales.xlsx"], "my_docs", "out")
 ```
+
+`convert_files()` raises `ValueError` if a file is missing, ambiguous or unsupported, or if none of the files could be converted.
 
 The wide-table threshold is the `max_cols_for_table=15` default of `extract_excel()`.
 
 ### Adding a file type
 
-Write a function that takes a `pathlib.Path` and returns a Markdown string, then register it in the `extractors` dict inside `process_all_extensions()`:
+Write a function that takes a `pathlib.Path` and returns a Markdown string, then register it in the module-level `EXTRACTORS` dict, which both modes use:
 
 ```python
 def extract_md(file_path):
     return file_path.read_text(encoding="utf-8")
 
-extractors = {
+EXTRACTORS = {
     ...,
     ".md": extract_md,
 }
@@ -142,4 +162,4 @@ extractors = {
 - **PDF:** only the embedded text layer is read. Scanned or image-only PDFs come out empty because there is no OCR.
 - **Images:** ignored entirely. Embedded images are not described or OCR'd.
 - **CSV:** read with pandas defaults (comma-separated, UTF-8).
-- **Unsupported types** such as `.xls`, `.ppt` and `.md` are skipped without a message.
+- **Unsupported types** such as `.xls`, `.ppt` and `.md` are skipped without a message when scanning `resources/`. If you name one on the command line, it is an error instead.
